@@ -2,10 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useBrand } from "@/lib/brand-context";
 
 export default function Navbar() {
   const brand = useBrand();
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/");
+  }
 
   return (
     <header className="bg-white border-b border-gray-200">
@@ -18,7 +25,7 @@ export default function Navbar() {
             height={40}
           />
         </Link>
-        <nav className="flex gap-4 text-sm">
+        <nav className="flex gap-4 text-sm items-center">
           <Link
             href="/send"
             className="text-gray-600 hover:text-gray-900 font-medium"
@@ -37,6 +44,12 @@ export default function Navbar() {
           >
             Settings
           </Link>
+          <button
+            onClick={handleLogout}
+            className="text-gray-400 hover:text-red-500 font-medium ml-2"
+          >
+            Log out
+          </button>
         </nav>
       </div>
     </header>

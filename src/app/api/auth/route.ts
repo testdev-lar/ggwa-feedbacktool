@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyPin, getSessionCookieConfig } from "@/lib/auth";
+import { createSupabaseServerClient } from "@/lib/supabase-auth";
 
 export async function POST(request: NextRequest) {
-  const { pin } = await request.json();
+  const { email, password } = await request.json();
 
-  if (!verifyPin(pin)) {
-    return NextResponse.json({ error: "Incorrect PIN" }, { status: 401 });
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 401 });
   }
 
-  const response = NextResponse.json({ success: true });
-  const cookie = getSessionCookieConfig();
-  response.cookies.set(cookie.name, cookie.value, {
-    httpOnly: cookie.httpOnly,
-    secure: cookie.secure,
-    sameSite: cookie.sameSite,
-    maxAge: cookie.maxAge,
-    path: cookie.path,
-  });
-
-  return response;
+  return NextResponse.json({ success: true });
 }

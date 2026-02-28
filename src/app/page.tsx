@@ -6,7 +6,8 @@ import Image from "next/image";
 import { useBrand } from "@/lib/brand-context";
 
 export default function LoginPage() {
-  const [pin, setPin] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const brand = useBrand();
@@ -21,14 +22,14 @@ export default function LoginPage() {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (res.ok) {
         router.push("/send");
       } else {
-        setError("Incorrect PIN");
-        setPin("");
+        const data = await res.json();
+        setError(data.error || "Invalid email or password");
       }
     } catch {
       setError("Something went wrong. Please try again.");
@@ -50,29 +51,34 @@ export default function LoginPage() {
           />
         </div>
         <h1 className="text-xl font-semibold text-center mb-6 text-gray-800">
-          Enter PIN to continue
+          Sign in to continue
         </h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
-            type="password"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={pin}
-            onChange={(e) => setPin(e.target.value)}
-            placeholder="Enter PIN"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-[var(--brand-color)] focus:border-transparent"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-color)] focus:border-transparent"
             autoFocus
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-color)] focus:border-transparent"
           />
           {error && (
             <p className="text-red-500 text-sm text-center">{error}</p>
           )}
           <button
             type="submit"
-            disabled={loading || !pin}
+            disabled={loading || !email || !password}
             className="w-full py-3 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             style={{ backgroundColor: brand.color }}
           >
-            {loading ? "Checking..." : "Log In"}
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
       </div>
