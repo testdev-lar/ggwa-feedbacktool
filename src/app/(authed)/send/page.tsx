@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import PhotoUpload from "@/components/photo-upload";
-import Image from "next/image";
-import Link from "next/link";
+import Navbar from "@/components/navbar";
 import { useBrand } from "@/lib/brand-context";
 
 export default function SendPage() {
@@ -75,19 +74,7 @@ export default function SendPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Image src={brand.logoUrl || "/logo.png"} alt={brand.shortName} width={120} height={40} />
-          <nav className="flex gap-4 text-sm">
-            <Link href="/send" className="font-medium" style={{ color: brand.color }}>
-              Send Photos
-            </Link>
-            <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-              Dashboard
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <Navbar />
 
       <main className="max-w-2xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">
