@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { useBrand } from "@/lib/brand-context";
 
 export default function LoginPage() {
@@ -80,6 +81,14 @@ export default function LoginPage() {
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
+          <div className="text-center">
+            <Link
+              href="/forgot-password"
+              className="text-sm text-gray-500 hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </form>
       </div>
     </div>
