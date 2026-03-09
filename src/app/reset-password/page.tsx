@@ -13,19 +13,36 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [ready, setReady] = useState(false);
-  const [debug, setDebug] = useState("");
   const brand = useBrand();
   const router = useRouter();
 
   useEffect(() => {
     async function init() {
-      // Read URL params directly from the browser
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      const hash = window.location.hash;
-      setDebug(`code=${code || "none"}, hash=${hash || "none"}`);
+      // Extract tokens directly from the URL hash
+      const hash = window.location.hash.substring(1);
+      const hashParams = new URLSearchParams(hash);
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
 
-      // Approach 1: PKCE flow — code in query params
+      if (accessToken && refreshToken) {
+        // Manually set the session from the hash tokens
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (!sessionError) {
+          setReady(true);
+          // Clean up the hash from the URL
+          window.history.replaceState(null, "", window.location.pathname);
+          return;
+        }
+        setError(sessionError.message);
+        return;
+      }
+
+      // Fallback: check for PKCE code in query params
+      const code = new URLSearchParams(window.location.search).get("code");
       if (code) {
         const { error: codeError } =
           await supabase.auth.exchangeCodeForSession(code);
@@ -33,27 +50,20 @@ export default function ResetPasswordPage() {
           setReady(true);
           return;
         }
-        setDebug((prev) => `${prev}, codeErr=${codeError.message}`);
+        setError(codeError.message);
+        return;
       }
 
-      // Approach 2: Implicit flow — tokens in URL hash
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange((event) => {
-        if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
-          setReady(true);
-        }
-      });
-
-      // Approach 3: Session already exists
+      // Fallback: check if session already exists
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
         setReady(true);
+        return;
       }
 
-      return () => subscription.unsubscribe();
+      setError("Invalid or expired reset link. Please request a new one.");
     }
 
     init();
@@ -119,15 +129,10 @@ export default function ResetPasswordPage() {
             </p>
           </div>
         ) : !ready ? (
-          <div className="text-center space-y-2">
+          <div className="text-center">
             <p className="text-gray-500 text-sm">
               Verifying your reset link...
             </p>
-            {debug && (
-              <p className="text-xs text-gray-400 break-all">
-                Debug: {debug}
-              </p>
-            )}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
