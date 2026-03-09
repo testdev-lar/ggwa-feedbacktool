@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useBrand } from "@/lib/brand-context";
+import { supabase } from "@/lib/supabase-browser";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -11,8 +12,29 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [ready, setReady] = useState(false);
   const brand = useBrand();
   const router = useRouter();
+
+  // Listen for the PASSWORD_RECOVERY event from the URL hash tokens
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "PASSWORD_RECOVERY") {
+          setReady(true);
+        }
+      }
+    );
+
+    // Also check if we already have a session (e.g. page refresh)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setReady(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,18 +52,16 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
       });
 
-      if (res.ok) {
-        setSuccess(true);
-        setTimeout(() => router.push("/"), 2000);
+      if (updateError) {
+        setError(updateError.message);
       } else {
-        const data = await res.json();
-        setError(data.error || "Something went wrong.");
+        setSuccess(true);
+        await supabase.auth.signOut();
+        setTimeout(() => router.push("/"), 2000);
       }
     } catch {
       setError("Something went wrong. Please try again.");
@@ -73,6 +93,12 @@ export default function ResetPasswordPage() {
           <div className="text-center">
             <p className="text-green-600 text-sm font-medium">
               Password updated! Redirecting to sign in...
+            </p>
+          </div>
+        ) : !ready ? (
+          <div className="text-center">
+            <p className="text-gray-500 text-sm">
+              Verifying your reset link...
             </p>
           </div>
         ) : (
