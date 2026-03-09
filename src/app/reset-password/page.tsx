@@ -13,27 +13,50 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [ready, setReady] = useState(false);
+  const [debug, setDebug] = useState("");
   const brand = useBrand();
   const router = useRouter();
 
-  // Listen for the PASSWORD_RECOVERY event from the URL hash tokens
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event) => {
-        if (event === "PASSWORD_RECOVERY") {
+    async function init() {
+      // Read URL params directly from the browser
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      const hash = window.location.hash;
+      setDebug(`code=${code || "none"}, hash=${hash || "none"}`);
+
+      // Approach 1: PKCE flow — code in query params
+      if (code) {
+        const { error: codeError } =
+          await supabase.auth.exchangeCodeForSession(code);
+        if (!codeError) {
+          setReady(true);
+          return;
+        }
+        setDebug((prev) => `${prev}, codeErr=${codeError.message}`);
+      }
+
+      // Approach 2: Implicit flow — tokens in URL hash
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
           setReady(true);
         }
-      }
-    );
+      });
 
-    // Also check if we already have a session (e.g. page refresh)
-    supabase.auth.getSession().then(({ data: { session } }) => {
+      // Approach 3: Session already exists
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session) {
         setReady(true);
       }
-    });
 
-    return () => subscription.unsubscribe();
+      return () => subscription.unsubscribe();
+    }
+
+    init();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -96,10 +119,15 @@ export default function ResetPasswordPage() {
             </p>
           </div>
         ) : !ready ? (
-          <div className="text-center">
+          <div className="text-center space-y-2">
             <p className="text-gray-500 text-sm">
               Verifying your reset link...
             </p>
+            {debug && (
+              <p className="text-xs text-gray-400 break-all">
+                Debug: {debug}
+              </p>
+            )}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
