@@ -11,10 +11,15 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin") || request.nextUrl.origin;
   const supabase = await createSupabaseServerClient();
 
-  await supabase.auth.resetPasswordForEmail(email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/api/auth/callback?next=/reset-password`,
   });
 
-  // Always return success to avoid leaking whether the email exists
+  // TODO: remove debug logging once confirmed working
+  if (error) {
+    console.error("Password reset error:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
   return NextResponse.json({ success: true });
 }
