@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useBrand } from "@/lib/brand-context";
-import { supabase } from "@/lib/supabase-browser";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+
+// Capture the hash IMMEDIATELY at module load — before any Supabase
+// client can detect and strip it from the URL
+const capturedHash =
+  typeof window !== "undefined" ? window.location.hash.substring(1) : "";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -15,55 +20,39 @@ export default function ResetPasswordPage() {
   const [ready, setReady] = useState(false);
   const brand = useBrand();
   const router = useRouter();
+  const clientRef = useRef<SupabaseClient | null>(null);
 
   useEffect(() => {
     async function init() {
-      // Extract tokens directly from the URL hash
-      const hash = window.location.hash.substring(1);
-      const hashParams = new URLSearchParams(hash);
+      const hashParams = new URLSearchParams(capturedHash);
       const accessToken = hashParams.get("access_token");
       const refreshToken = hashParams.get("refresh_token");
 
-      if (accessToken && refreshToken) {
-        // Manually set the session from the hash tokens
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
+      if (!accessToken || !refreshToken) {
+        setError("Invalid or expired reset link. Please request a new one.");
+        return;
+      }
 
-        if (!sessionError) {
-          setReady(true);
-          // Clean up the hash from the URL
-          window.history.replaceState(null, "", window.location.pathname);
-          return;
-        }
+      // Create a dedicated client that won't auto-detect the URL hash
+      const client = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { auth: { detectSessionInUrl: false, persistSession: false } }
+      );
+
+      const { error: sessionError } = await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (sessionError) {
         setError(sessionError.message);
         return;
       }
 
-      // Fallback: check for PKCE code in query params
-      const code = new URLSearchParams(window.location.search).get("code");
-      if (code) {
-        const { error: codeError } =
-          await supabase.auth.exchangeCodeForSession(code);
-        if (!codeError) {
-          setReady(true);
-          return;
-        }
-        setError(codeError.message);
-        return;
-      }
-
-      // Fallback: check if session already exists
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        setReady(true);
-        return;
-      }
-
-      setError("Invalid or expired reset link. Please request a new one.");
+      clientRef.current = client;
+      setReady(true);
+      window.history.replaceState(null, "", window.location.pathname);
     }
 
     init();
@@ -85,7 +74,7 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
+      const { error: updateError } = await clientRef.current!.auth.updateUser({
         password,
       });
 
@@ -93,7 +82,6 @@ export default function ResetPasswordPage() {
         setError(updateError.message);
       } else {
         setSuccess(true);
-        await supabase.auth.signOut();
         setTimeout(() => router.push("/"), 2000);
       }
     } catch {
@@ -130,9 +118,13 @@ export default function ResetPasswordPage() {
           </div>
         ) : !ready ? (
           <div className="text-center">
-            <p className="text-gray-500 text-sm">
-              Verifying your reset link...
-            </p>
+            {error ? (
+              <p className="text-red-500 text-sm">{error}</p>
+            ) : (
+              <p className="text-gray-500 text-sm">
+                Verifying your reset link...
+              </p>
+            )}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
