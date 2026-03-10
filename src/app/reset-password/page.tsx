@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useBrand } from "@/lib/brand-context";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -15,7 +15,7 @@ export default function ResetPasswordPage() {
   const [ready, setReady] = useState(false);
   const brand = useBrand();
   const router = useRouter();
-  const clientRef = useRef<SupabaseClient | null>(null);
+  const accessTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -29,26 +29,33 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      // Create a dedicated client that won't interfere with the main app session
+      // Create a throwaway client just for OTP verification
       const client = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { detectSessionInUrl: false, persistSession: false } }
+        {
+          auth: {
+            detectSessionInUrl: false,
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        }
       );
 
       // Verify the OTP to establish a recovery session
-      const { error: otpError } = await client.auth.verifyOtp({
+      const { data, error: otpError } = await client.auth.verifyOtp({
         email,
         token,
         type: "recovery",
       });
 
-      if (otpError) {
+      if (otpError || !data.session) {
         setError("Invalid or expired reset link. Please request a new one.");
         return;
       }
 
-      clientRef.current = client;
+      // Store the access token directly — don't rely on client session state
+      accessTokenRef.current = data.session.access_token;
       setReady(true);
 
       // Clean the token out of the URL
@@ -74,12 +81,24 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const { error: updateError } = await clientRef.current!.auth.updateUser({
-        password,
-      });
+      // Call Supabase Auth API directly with the stored access token
+      // This avoids any client-side session management issues
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/user`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            Authorization: `Bearer ${accessTokenRef.current}`,
+          },
+          body: JSON.stringify({ password }),
+        }
+      );
 
-      if (updateError) {
-        setError(updateError.message);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.msg || body?.message || "Failed to update password.");
       } else {
         setSuccess(true);
         setTimeout(() => router.push("/"), 2000);
