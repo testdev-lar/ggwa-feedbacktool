@@ -81,24 +81,21 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      // Call Supabase Auth API directly with the stored access token
-      // This avoids any client-side session management issues
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/user`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            Authorization: `Bearer ${accessTokenRef.current}`,
-          },
-          body: JSON.stringify({ password }),
-        }
-      );
+      // Send to our own API route — it uses the admin client server-side
+      // to update the password, avoiding any client-side API key issues
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password,
+          access_token: accessTokenRef.current,
+        }),
+      });
+
+      const body = await res.json();
 
       if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        setError(body?.msg || body?.message || "Failed to update password.");
+        setError(body.error || "Failed to update password.");
       } else {
         setSuccess(true);
         setTimeout(() => router.push("/"), 2000);
