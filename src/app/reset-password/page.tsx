@@ -6,11 +6,6 @@ import Image from "next/image";
 import { useBrand } from "@/lib/brand-context";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-// Capture the hash IMMEDIATELY at module load — before any Supabase
-// client can detect and strip it from the URL
-const capturedHash =
-  typeof window !== "undefined" ? window.location.hash.substring(1) : "";
-
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -24,34 +19,39 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     async function init() {
-      const hashParams = new URLSearchParams(capturedHash);
-      const accessToken = hashParams.get("access_token");
-      const refreshToken = hashParams.get("refresh_token");
+      // Read OTP token and email from query params
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token");
+      const email = params.get("email");
 
-      if (!accessToken || !refreshToken) {
+      if (!token || !email) {
         setError("Invalid or expired reset link. Please request a new one.");
         return;
       }
 
-      // Create a dedicated client that won't auto-detect the URL hash
+      // Create a dedicated client that won't interfere with the main app session
       const client = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         { auth: { detectSessionInUrl: false, persistSession: false } }
       );
 
-      const { error: sessionError } = await client.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
+      // Verify the OTP to establish a recovery session
+      const { error: otpError } = await client.auth.verifyOtp({
+        email,
+        token,
+        type: "recovery",
       });
 
-      if (sessionError) {
-        setError(sessionError.message);
+      if (otpError) {
+        setError("Invalid or expired reset link. Please request a new one.");
         return;
       }
 
       clientRef.current = client;
       setReady(true);
+
+      // Clean the token out of the URL
       window.history.replaceState(null, "", window.location.pathname);
     }
 

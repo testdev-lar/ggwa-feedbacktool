@@ -27,13 +27,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (error || !data?.properties?.action_link) {
+    if (error || !data?.properties?.email_otp) {
       // Don't leak whether the email exists — show success either way
       return NextResponse.json({ success: true });
     }
 
-    // Send the reset email via Resend (same way job photo emails work)
-    const resetLink = data.properties.action_link;
+    // Build the reset link with OTP token directly (bypasses PKCE/implicit flow issues)
+    const resetLink = `${origin}/reset-password?token=${encodeURIComponent(data.properties.email_otp)}&email=${encodeURIComponent(email)}`;
     const logoUrl = brand.logoUrl || `${origin}/logo.png`;
 
     await getResend().emails.send({
